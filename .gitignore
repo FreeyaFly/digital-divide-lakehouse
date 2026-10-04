@@ -1,0 +1,39 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+*.tfplan
+crash.log
+
+# Editor backups (can hold copies of secret files, e.g. terraform.tfvars.bak)
+*.bak
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# dbt
+transform/dbt/target/
+transform/dbt/dbt_packages/
+transform/dbt/logs/
+
+# Secrets / local
+.env
+.databrickscfg
+*.pem
+
+# Data
+data/
+*.parquet
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
