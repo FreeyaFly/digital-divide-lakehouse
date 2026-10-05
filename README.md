@@ -46,9 +46,11 @@ infra/terraform/   Azure resources: resource group, ADLS Gen2, Key Vault, budget
 ingestion/         Python extractors (World Bank) and their config
 tests/             pytest unit tests for the extractors
 notebooks/         Databricks notebooks (source format): validation, Bronze, Silver
+tools/             Developer tools, e.g. exporting clean notebook run snapshots
 transform/dbt/     dbt project                              (week 5)
 orchestration/     Airflow DAGs                             (week 6)
 docs/              Decision records (ADRs) and weekly checklists
+docs/notebook-runs/  Executed notebook snapshots (.ipynb with outputs)
 ```
 
 Design decisions are recorded in [ADR 0001: platform choice](docs/adr/0001-platform-choice.md) and [ADR 0002: World Bank ingestion](docs/adr/0002-worldbank-ingestion.md).
@@ -85,6 +87,8 @@ databricks workspace import "/Users/<you>/ddlake/20_worldbank_bronze_to_silver" 
 ```
 
 Notebook 10 needs the `storage_account` widget set. Both notebooks are idempotent: a second run copies, inserts and merges nothing.
+
+**See the actual output:** [docs/notebook-runs/](docs/notebook-runs/) holds executed snapshots of the notebooks, exported with `tools/export_notebook_snapshot.py` (code identical to `notebooks/`, Databricks metadata stripped, scanned for identifiers). The 2026-10-05 snapshots are a re-run, so they show idempotency (0 rows copied, inserted or merged); first-load numbers are in [ADR 0002](docs/adr/0002-worldbank-ingestion.md#results-wdi-release-2026-07-13).
 
 ## Cost control
 
