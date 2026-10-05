@@ -2,7 +2,9 @@
 # MAGIC %md
 # MAGIC # 20 · World Bank: Bronze → Silver
 # MAGIC
-# MAGIC Builds two Silver tables from the **latest source version** in Bronze:
+# MAGIC Builds two Silver tables from the **latest release recorded as complete** in
+# MAGIC `ingestion_versions` (written by Notebook 10 after reconciliation), never from whatever
+# MAGIC happens to be newest in Bronze. Bronze must hold exactly the indicators of that record.
 # MAGIC
 # MAGIC | Table | Key | Notes |
 # MAGIC |---|---|---|
@@ -31,6 +33,7 @@ BRONZE_OBSERVATIONS = f"{T}.bronze_worldbank_observations"
 BRONZE_COUNTRIES = f"{T}.bronze_worldbank_countries"
 SILVER_COUNTRIES = f"{T}.silver_worldbank_countries"
 SILVER_VALUES = f"{T}.silver_worldbank_indicator_values"
+INGESTION_VERSIONS = f"{T}.ingestion_versions"
 
 # COMMAND ----------
 
@@ -38,14 +41,23 @@ from pyspark.sql import Window
 from pyspark.sql import functions as F
 
 
-def latest_version(table: str) -> str:
-    return spark.table(table).agg(F.max("_source_updated")).first()[0]
+# The release to process: the newest one Notebook 10 recorded as fully landed and reconciled.
+release = (
+    spark.table(INGESTION_VERSIONS)
+    .where("source = 'worldbank'")
+    .orderBy(F.col("source_updated").desc())
+    .first()
+)
+assert release, f"No completed World Bank release in {INGESTION_VERSIONS}; run Notebook 10 first"
+RELEASE = release["source_updated"]
+RELEASE_INDICATORS = set(release["indicators"])
+print(f"Processing release {RELEASE}: {len(RELEASE_INDICATORS)} indicators, "
+      f"countries={release['countries']}")
 
 
 def latest_rows(table: str):
-    """All Bronze rows of the newest source version."""
-    version = latest_version(table)
-    return spark.table(table).where(F.col("_source_updated") == version), version
+    """All Bronze rows of the completed release."""
+    return spark.table(table).where(F.col("_source_updated") == RELEASE), RELEASE
 
 
 def dedupe(df, key: list[str], label: str):
@@ -91,6 +103,7 @@ def merge(target: str, source_view: str, key: list[str], columns: list[str]) -> 
 # COMMAND ----------
 
 countries_raw, countries_version = latest_rows(BRONZE_COUNTRIES)
+assert countries_raw.count() > 0, f"No country rows in Bronze for release {RELEASE}"
 countries_raw = dedupe(countries_raw, ["id"], "countries")
 
 countries = (
@@ -134,6 +147,15 @@ _ = merge(SILVER_COUNTRIES, "src_countries", ["country_iso3"], countries.columns
 
 obs_raw, obs_version = latest_rows(BRONZE_OBSERVATIONS)
 bronze_rows = obs_raw.count()
+
+# Completeness gate, checked against the completion record rather than against Bronze itself:
+# the MERGE below deletes rows missing from the source, so a partial release must never get here.
+bronze_indicators = {r[0] for r in obs_raw.select("indicator.id").distinct().collect()}
+missing = sorted(RELEASE_INDICATORS - bronze_indicators)
+unexpected = sorted(bronze_indicators - RELEASE_INDICATORS)
+assert not missing and not unexpected, (
+    f"Bronze does not match the completion record for {RELEASE}: "
+    f"missing {missing}, unexpected {unexpected}")
 
 # WDI quirk: income-group aggregates (High income, Low income, ...) come with an empty
 # countryiso3code; only their 2-letter country.id (e.g. XD) is set. Resolve those through
@@ -221,13 +243,22 @@ checks = spark.sql(f"""
 """).first().asDict()
 print(checks)
 
-expected_indicators = spark.table(BRONZE_OBSERVATIONS).where(
-    F.col("_source_updated") == obs_version).select("indicator.id").distinct().count()
+# Expected indicators come from the completion record (not from Silver or Bronze themselves);
+# an indicator with no values at all in this release legitimately has no Silver rows.
+indicators_with_values = {r[0] for r in typed.where("value IS NOT NULL")
+                          .select("indicator_code").distinct().collect()}
+silver_indicators = {r[0] for r in spark.table(SILVER_VALUES)
+                     .select("indicator_code").distinct().collect()}
+expected_indicators = RELEASE_INDICATORS & indicators_with_values
+if RELEASE_INDICATORS - indicators_with_values:
+    print(f"Note: no values at all for {sorted(RELEASE_INDICATORS - indicators_with_values)}")
 
 assert checks["duplicate_keys"] == 0, "Duplicate (country, indicator, year) keys in Silver"
 assert checks["years_out_of_range"] == 0, "Years outside the configured range"
-assert checks["indicators"] == expected_indicators, (
-    f"{checks['indicators']} indicators in Silver, {expected_indicators} in Bronze")
+assert silver_indicators == expected_indicators, (
+    f"Silver indicators differ from the completion record: "
+    f"missing {sorted(expected_indicators - silver_indicators)}, "
+    f"unexpected {sorted(silver_indicators - expected_indicators)}")
 assert checks["unknown_entities"] == 0, "Observations for entities missing from the country table"
 print(f"All checks passed for WDI release {obs_version}")
 

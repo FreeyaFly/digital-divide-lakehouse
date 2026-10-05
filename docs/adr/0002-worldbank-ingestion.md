@@ -44,13 +44,15 @@ Architecture A from [ADR 0001](0001-platform-choice.md) applies: ADLS is the raw
 - Files already present in the Volume with the same size are skipped.
 
 ### Bronze (Notebook 10)
+- **Only files the extractor's watermark declares complete are copied and loaded**: the watermark's release, and only its listed indicators and countries. Anything else, such as a half-landed newer release, is skipped and counted as "not covered by the watermark".
 - **`COPY INTO`** loads `bronze_worldbank_observations` and `bronze_worldbank_countries`. COPY INTO tracks loaded files, so a re-run inserts nothing.
 - **All fields are stored as strings** (`primitivesAsString`), so type inference can never break a load. Every row also gets `_source_file`, `_source_updated` and `_loaded_at`.
 - Bronze keeps **every** source version, which gives a history of WDI revisions.
 - Bronze rows are reconciled **per file** against the run manifests, and any mismatch fails the notebook.
+- After reconciliation, the release is recorded in the control table **`ingestion_versions`** (source, release, indicators, countries flag, files, rows, completion time). This is the hand-off from Bronze to Silver.
 
 ### Silver (Notebook 20)
-- Silver is built from the **latest** source version only.
+- Silver is built from the **latest release recorded as complete in `ingestion_versions`**, not from the newest data that happens to be in Bronze. Before the MERGE, Bronze must hold **exactly** that record's indicators, plus country rows.
 - **Blank ISO3 codes are resolved via iso2 → ISO3 before de-duplication.**
 - Types are converted with `try_cast`, because serverless runs with ANSI mode on and a plain `CAST('' AS DOUBLE)` raises an error.
 - Null values are dropped: a missing value means there is no row.
@@ -60,7 +62,8 @@ Architecture A from [ADR 0001](0001-platform-choice.md) applies: ADLS is the raw
   - no failed numeric casts;
   - de-duplication drops **zero** rows (within one release every key must be unique);
   - row conservation: Silver input = Bronze rows − null values;
-  - unique keys, years within range, the same indicator count as Bronze, and no unknown entities.
+  - unique keys, years within range, and no unknown entities;
+  - Silver's indicators equal the completion record's indicators that have at least one value. The expectation comes from outside Silver, not from Bronze.
 
 ## Validated on Free Edition (2026-10-05)
 - Secret scopes work (`databricks secrets create-scope`).
@@ -81,6 +84,24 @@ The first Silver run passed every check but **silently lost 1,456 rows**. De-dup
 
 The fix resolves ISO3 via iso2 first, makes de-duplication fail if it drops anything, and adds a row-conservation gate. The repaired run inserted exactly the 1,098 missing income-group values, with 0 updates and 0 deletes. "Not classified" has no values at all, which is why there are 47 aggregates rather than 48.
 
+## Second issue: partially landed releases
+A review after week 2 found a failure mode that no check covered.
+
+1. A new WDI release starts landing, and the extractor dies after some indicators. The watermark is correctly not advanced, but those files are already in ADLS.
+2. The original Notebook 10 copied and loaded every file it found, and Notebook 20 took the newest release in Bronze, which was the partial one.
+3. Because the MERGE deletes rows missing from the source (correct for full snapshots), Silver would have **deleted every indicator that had not landed yet**.
+4. The indicator check compared Silver with Bronze, and both were equally partial, so it would have passed.
+
+The extractor's commit point protected only the extractor; downstream never read it. Like the first issue, the check compared the data with itself.
+
+**Fix:** completeness now travels with the data. Notebook 10 loads only what the watermark vouches for and writes a completion record after reconciliation. Notebook 20 processes only recorded releases and compares Bronze and Silver against that record.
+
+**Verified end to end (2026-10-05):** a fake partial release `source_updated=2099-01-01` (one indicator, watermark untouched) was placed in ADLS.
+- Notebook 10 reported `Complete per watermark: 15 files | not covered by the watermark: 1 files` and copied and inserted nothing.
+- Notebook 20 processed release 2026-07-13, with the MERGE at 0 inserted, 0 updated and 0 deleted, and 74,259 rows unchanged.
+- The fake partition was then deleted, and it never reached the Volume.
+- With the original notebooks, the same input would have deleted the other 13 indicators.
+
 ## Coverage notes for analysis
 - Female and male internet use: about 1,360 values across 137 countries; treat them as a **subsample**.
 - Secure Internet servers start in **2010**.
@@ -92,3 +113,5 @@ The fix resolves ISO3 via iso2 first, makes de-duplication fail if it drops anyt
 - **The SAS must be regenerated at least weekly** (the current one expires 2026-10-11). Week 6 automates this in Airflow; until then it is a manual step and an expired SAS fails Notebook 10 with an explicit 403 message.
 - Silver holds only the current country attributes. The history of income-group reclassification each July is handled by a dbt snapshot in week 5.
 - The notebooks are run by hand, in the order ingestion → 10 → 20, until week 6 orchestration.
+- The watermark records only the current release. If two releases land before Notebook 10 runs, the older one never reaches Bronze. Silver is unaffected, because it uses only the latest release, but Bronze's revision history has a gap.
+- Notebook 10 needs a watermark in ADLS and fails fast if the extractor has never completed a run.

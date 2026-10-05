@@ -39,6 +39,17 @@
 | Duplicate keys, years out of range, unknown entities, failed casts | 0 |
 | Indicators / countries / aggregates | 14 / 217 / 47 |
 
+## D2. Partial-release guard (ADR 0002 → Second issue)
+
+| Check, with a fake partial release `2099-01-01` in ADLS | Result |
+|---|---|
+| Notebook 10 file selection | 15 complete per watermark, **1 not covered (skipped)** |
+| Notebook 10 copy / COPY INTO | 0 copied, 0 inserted; reconciliation OK |
+| `ingestion_versions` | one row: worldbank, 2026-07-13, 14 indicators, 15 files, 96,755 rows |
+| Notebook 20 release processed | 2026-07-13 (not 2099-01-01) |
+| Silver MERGE | 0 / 0 / 0, 74,259 rows unchanged |
+| Cleanup | fake partition deleted from ADLS; it never reached the Volume |
+
 ## E. Repo
 - [x] Commit: World Bank ingestion with watermark and tests
 - [x] Commit: Databricks Bronze and Silver notebooks

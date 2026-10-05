@@ -88,7 +88,7 @@ databricks workspace import "/Users/<you>/ddlake/20_worldbank_bronze_to_silver" 
 
 Notebook 10 needs the `storage_account` widget set. Both notebooks are idempotent: a second run copies, inserts and merges nothing.
 
-**See the actual output:** [docs/notebook-runs/](docs/notebook-runs/) holds executed snapshots of the notebooks, exported with `tools/export_notebook_snapshot.py` (code identical to `notebooks/`, Databricks metadata stripped, scanned for identifiers). The 2026-10-05 snapshots are a re-run, so they show idempotency (0 rows copied, inserted or merged); first-load numbers are in [ADR 0002](docs/adr/0002-worldbank-ingestion.md#results-wdi-release-2026-07-13).
+**See the actual output:** [docs/notebook-runs/](docs/notebook-runs/) holds executed snapshots of the notebooks, exported with `tools/export_notebook_snapshot.py` (code identical to `notebooks/`, Databricks metadata stripped, scanned for identifiers). The 2026-10-05 snapshots are a re-run with a fake partial release planted in the lake, so they show both idempotency (0 rows copied, inserted or merged) and the partial-release guard (`not covered by the watermark: 1 files`); first-load numbers are in [ADR 0002](docs/adr/0002-worldbank-ingestion.md#results-wdi-release-2026-07-13).
 
 ## Cost control
 
