@@ -1,0 +1,27 @@
+# World Bank ingestion settings. Adding or removing an indicator needs no code change:
+# the next run fetches only indicators that are missing for the current source version.
+
+source_id = 2          # World Development Indicators (WDI)
+start_year = 2000
+end_year = 2025
+per_page = 20000       # one page per indicator (~6,900 rows); pagination is still handled
+
+indicators = [
+    # Digital access (ITU unless noted)
+    "IT.NET.USER.ZS",     # Individuals using the Internet (% of population)
+    "IT.NET.USER.FE.ZS",  # ... female; low coverage (~70 countries in 2022)
+    "IT.NET.USER.MA.ZS",  # ... male; low coverage (~70 countries in 2022)
+    "IT.NET.BBND.P2",     # Fixed broadband subscriptions (per 100 people)
+    "IT.CEL.SETS.P2",     # Mobile cellular subscriptions (per 100 people); can exceed 100
+    "IT.NET.SECR.P6",     # Secure Internet servers (per 1 million people); Netcraft
+    # Infrastructure
+    "EG.ELC.ACCS.ZS",     # Access to electricity (% of population)
+    "EG.ELC.ACCS.RU.ZS",  # ... rural
+    "EG.ELC.ACCS.UR.ZS",  # ... urban
+    "SP.URB.TOTL.IN.ZS",  # Urban population (% of total)
+    # Socio-economic context
+    "NY.GDP.PCAP.CD",     # GDP per capita (current US$)
+    "NY.GDP.PCAP.PP.CD",  # GDP per capita, PPP (current international $); default for comparisons
+    "SP.POP.TOTL",        # Population, total
+    "SE.TER.ENRR",        # School enrollment, tertiary (% gross)
+]
