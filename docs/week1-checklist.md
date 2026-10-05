@@ -39,7 +39,7 @@ Result (2026-10-05): **go**. Outcome recorded in [ADR 0001 → Consequences](adr
 - [ ] Record the quota limits you notice (compute, warehouse size). Deferred to the first Ookla run.
 
 ## D. Repo
-- [ ] Create a public GitHub repo `digital-divide-lakehouse` and push (public repos get free GitHub Actions)
+- [x] Create a public GitHub repo `digital-divide-lakehouse` and push (public repos get free GitHub Actions)
 - [x] Write the outcome of section C into `docs/adr/0001-platform-choice.md`
 
 ## Weekly cost check (every week until `terraform destroy`)
