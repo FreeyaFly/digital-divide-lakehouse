@@ -31,4 +31,4 @@
 - [x] Run snapshots `docs/notebook-runs/2026-10-11_3*` exported, scan clean
 - [x] Commit: Ookla notebooks
 - [x] Commit: ADR 0003, checklist, README, snapshots
-- [ ] Push
+- [x] Push
