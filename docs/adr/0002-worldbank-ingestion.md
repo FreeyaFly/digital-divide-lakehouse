@@ -102,6 +102,20 @@ The extractor's commit point protected only the extractor; downstream never read
 - The fake partition was then deleted, and it never reached the Volume.
 - With the original notebooks, the same input would have deleted the other 13 indicators.
 
+## First real incremental release (WDI 2026-10-08, processed 2026-10-11)
+The first source update after go-live ran through the unchanged pipeline.
+
+| Step | Result |
+|---|---|
+| Extractor | New release detected; landed into `source_updated=2026-10-08`: 15 files, 97,120 rows (previous release: 96,755). One request timed out after 60 s and succeeded on the automatic retry. |
+| Notebook 10 | 30 files in ADLS: 15 of the new release passed the watermark, while 15 of the old release were "not covered" (already loaded). 96,824 + 296 rows loaded and reconciled; `ingestion_versions` now holds both releases. |
+| Silver countries | 1 inserted: the new aggregate **FCV, Fragility, Conflict, and Violence situations**. |
+| Silver values | **428 updated, 233 inserted, 0 deleted**; 74,492 rows (= 96,824 − 22,332 nulls). The other ~74k rows were untouched thanks to the row hash. |
+
+**What changed:** all 661 changes are on **aggregate** rows: GDP per capita (PPP 115, US$ 112), electricity access (98 / 91 / 83), urban share (80), population (26), mobile (23), broadband (18) and secure servers (15). No country-level value was revised; the World Bank recomputed regional and income-group aggregates and added the FCV group.
+
+**Consequence for Gold (week 5):** WDI aggregates can change between releases without any country data changing. Regional and income-group figures in Gold should therefore be computed from country rows, with WDI aggregates kept in Silver only for cross-checking.
+
 ## Coverage notes for analysis
 - Female and male internet use: about 1,360 values across 137 countries; treat them as a **subsample**.
 - Secure Internet servers start in **2010**.

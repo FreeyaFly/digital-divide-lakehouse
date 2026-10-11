@@ -50,6 +50,14 @@
 | Silver MERGE | 0 / 0 / 0, 74,259 rows unchanged |
 | Cleanup | fake partition deleted from ADLS; it never reached the Volume |
 
+## D3. First real incremental release (WDI 2026-10-08, run 2026-10-11)
+- [x] SAS renewed (new one expires 2026-10-17); `put-secret` was missed on the first try and caught by the expiry check
+- [x] Extractor: `source_updated=2026-10-08`, 15 files, 97,120 rows; one timeout recovered by retry
+- [x] Notebook 10: 15 files passed the watermark, 15 old ones not covered; 96,824 + 296 loaded; reconciliation OK; `ingestion_versions` has 2 rows
+- [x] Notebook 20: countries +1 (FCV aggregate); values 428 updated, 233 inserted, 0 deleted; 74,492 rows; all checks passed
+- [x] All 661 changes are on aggregates; no country value revised (ADR 0002)
+- [x] Snapshots `docs/notebook-runs/2026-10-11_*` exported, scan clean
+
 ## E. Repo
 - [x] Commit: World Bank ingestion with watermark and tests
 - [x] Commit: Databricks Bronze and Silver notebooks
