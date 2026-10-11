@@ -2,14 +2,14 @@
 
 An end-to-end data platform that measures the digital divide, from global country-level ICT indicators down to broadband quality in Dutch municipalities.
 
-> Status: **Week 3 done: Ookla speed tiles** (80 M global rows in Bronze) mapped to all 342 Dutch municipalities with H3. Next: global country-level aggregation.
+> Status: **Week 4 done: every Ookla tile assigned to a country** (18.3 M distinct tiles, exact H3 core/border-chip join, identical to an independent shapely check) and aggregated per country and quarter. Next: dbt Gold star schema.
 
 | Week | Scope | Status |
 |---|---|---|
 | 1 | Terraform foundation, Databricks Free Edition validation | ✅ |
 | 2 | World Bank: API → ADLS → Bronze → Silver, incremental and idempotent | ✅ |
 | 3 | Ookla: 8 quarters × fixed/mobile into Bronze (80 M rows); Dutch municipalities via H3 | ✅ |
-| 4 | Ookla global country-level aggregation, performance notes | ⏳ |
+| 4 | Ookla global country-level aggregation (Natural Earth + H3 tessellation), performance notes | ✅ |
 | 5 | dbt Gold star schema, SCD2 snapshot | ⏳ |
 | 6 | Airflow orchestration, GitHub Actions CI | ⏳ |
 | 7 | Power BI report | ⏳ |
@@ -39,6 +39,7 @@ An end-to-end data platform that measures the digital divide, from global countr
 | [World Bank API](https://datahelpdesk.worldbank.org/knowledgebase/articles/889392) | country × year | ~100k rows | Incremental API ingestion; income-group reclassification drives an SCD2 snapshot |
 | [Ookla Open Data](https://github.com/teamookla/ookla-open-data) | ~600 m tile × quarter | 80 M rows (8 quarters, fixed + mobile) | Distributed processing with PySpark, partitioned incremental loads |
 | [PDOK Bestuurlijke Gebieden](https://api.pdok.nl/kadaster/bestuurlijkegebieden/ogc/v1) | Dutch municipality | 342 boundaries | Spatial join of speed tiles to municipalities via H3 |
+| [Natural Earth Admin 0](https://www.naturalearthdata.com/downloads/10m-cultural-vectors/10m-admin-0-countries/) (1:10m, v5.1.2) | Country | 258 units | Exact global spatial join via H3 tessellation (core cells + border chips) |
 | [CBS StatLine](https://opendata.cbs.nl/) | Dutch municipality | small | Local drill-down (optional) |
 
 ## Repository layout
@@ -46,8 +47,9 @@ An end-to-end data platform that measures the digital divide, from global countr
 ```
 infra/terraform/   Azure resources: resource group, ADLS Gen2, Key Vault, budget alert
 ingestion/         Python extractors (World Bank) and their config
-tests/             pytest unit tests for the extractors
-notebooks/         Databricks notebooks (source format): validation, Bronze, Silver
+tests/             pytest unit tests (extractors, notebook helpers, tools)
+notebooks/         Databricks notebooks (source format): validation, Bronze, Silver,
+                   plus country_codes.py, a helper module imported by Notebook 34
 tools/             Developer tools, e.g. exporting clean notebook run snapshots
 transform/dbt/     dbt project                              (week 5)
 orchestration/     Airflow DAGs                             (week 6)
@@ -55,7 +57,7 @@ docs/              Decision records (ADRs) and weekly checklists
 docs/notebook-runs/  Executed notebook snapshots (.ipynb with outputs)
 ```
 
-Design decisions are recorded in [ADR 0001: platform choice](docs/adr/0001-platform-choice.md), [ADR 0002: World Bank ingestion](docs/adr/0002-worldbank-ingestion.md) and [ADR 0003: Ookla ingestion and Dutch municipalities](docs/adr/0003-ookla-ingestion.md).
+Design decisions are recorded in [ADR 0001: platform choice](docs/adr/0001-platform-choice.md), [ADR 0002: World Bank ingestion](docs/adr/0002-worldbank-ingestion.md), [ADR 0003: Ookla ingestion and Dutch municipalities](docs/adr/0003-ookla-ingestion.md) and [ADR 0004: global country-level aggregation](docs/adr/0004-ookla-country-aggregation.md).
 
 ## How to run (World Bank)
 
@@ -102,8 +104,17 @@ No Azure access or secrets are needed: Ookla and PDOK are public. Import the not
 | `31_ookla_land_to_bronze` | Latest 8 quarters × fixed/mobile into `bronze_ookla_tiles`; resumable; deletes raw files after reconciling | ~7 min first run, seconds afterwards |
 | `32_nl_municipalities` | PDOK boundaries → `silver_nl_municipalities` and H3 cells | ~1 min |
 | `33_ookla_nl_silver` | Dutch tiles → municipalities (H3 equi-join) → `silver_ookla_nl_tiles`, with an exact-method accuracy check | ~3 min |
+| `34_country_boundaries` | Natural Earth countries → `silver_country_boundaries`, reconciled with WDI, cut into H3 resolution-5 chips (`silver_country_h3_chips`) | ~5 min |
+| `35_ookla_country_silver` | Every tile → country (`silver_ookla_tile_country`, incremental) → `silver_ookla_country_quarter`, checked against an independent shapely assignment | ~2 min first run |
 
-Snapshots of the first run are in `docs/notebook-runs/2026-10-11_3*`.
+Notebook 34 imports `notebooks/country_codes.py`, so import that file into the same workspace folder as a workspace file:
+
+```powershell
+databricks workspace import "/Users/<you>/ddlake/country_codes.py" `
+  --file notebooks/country_codes.py --format AUTO --overwrite --profile <profile>
+```
+
+Snapshots of the first runs are in `docs/notebook-runs/2026-10-11_3*` (week 3) and `docs/notebook-runs/2026-10-12_3*` (week 4).
 
 ## Cost control
 
@@ -121,3 +132,4 @@ See the cost model in [docs/adr/0001-platform-choice.md](docs/adr/0001-platform-
 - **World Bank, World Development Indicators**, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Within WDI, the internet, broadband and mobile indicators originate from the ITU World Telecommunication/ICT Indicators Database, and secure Internet servers from Netcraft.
 - **Speed test data © Ookla**, 2019–present, licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 - **Municipality boundaries © Kadaster** (Bestuurlijke Gebieden, via PDOK), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- **Country boundaries: Made with Natural Earth.** Free vector and raster map data @ [naturalearthdata.com](https://www.naturalearthdata.com/) (public domain).
