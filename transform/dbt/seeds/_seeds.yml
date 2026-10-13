@@ -1,0 +1,26 @@
+version: 2
+
+seeds:
+  - name: wb_income_history
+    description: >
+      World Bank income classification of each economy per fiscal year, FY89–FY27, generated
+      from OGHIST.xlsx by `python -m ingestion.worldbank.income_history` (SHA-256 pinned).
+      Years in which an economy was not classified have no row. Source of the SCD2 dimension.
+    config:
+      column_types:
+        country_code: string
+        country_name: string
+        fiscal_year: int
+        valid_from: date
+        income_code: string
+    columns:
+      - name: country_code
+        data_tests: [not_null]
+      - name: fiscal_year
+        data_tests: [not_null]
+      - name: income_code
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["LIC", "LMC", "UMC", "HIC"]

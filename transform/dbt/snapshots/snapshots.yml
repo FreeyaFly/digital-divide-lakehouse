@@ -1,0 +1,12 @@
+snapshots:
+  - name: snap_wb_country_income
+    description: >
+      Records every future change to an economy's income group, region or lending category as
+      the Indicators API reports it (next reclassification: July 2027). History before the first
+      run comes from dim_country_income_history.
+    relation: ref('stg_wb_countries')
+    config:
+      schema: snapshots
+      unique_key: country_code
+      strategy: check
+      check_cols: [income_code, region_code, lending_code]

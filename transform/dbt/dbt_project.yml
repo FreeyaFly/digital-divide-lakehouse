@@ -1,0 +1,28 @@
+name: digital_divide
+version: "0.1.0"
+config-version: 2
+profile: digital_divide
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+clean-targets: ["target", "dbt_packages", "logs"]
+
+# Schemas follow dbt's default naming: <target schema>_<custom schema>, e.g.
+# digital_divide_dev_staging (views over Silver, seeds) and digital_divide_dev_gold (what Power
+# BI reads).
+models:
+  digital_divide:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: gold
+
+seeds:
+  digital_divide:
+    +schema: staging

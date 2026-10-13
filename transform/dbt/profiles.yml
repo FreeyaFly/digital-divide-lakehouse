@@ -1,0 +1,17 @@
+# Connection to the Databricks SQL warehouse. No values live here: all three come from
+# environment variables set on your machine (see README, "How to run (dbt)").
+#   DBT_DATABRICKS_HOST       workspace host, without https://
+#   DBT_DATABRICKS_HTTP_PATH  SQL warehouse HTTP path, /sql/1.0/warehouses/<id>
+#   DBT_DATABRICKS_TOKEN      personal access token
+# dbt reads this file because it sits in the directory dbt is run from.
+digital_divide:
+  target: dev
+  outputs:
+    dev:
+      type: databricks
+      catalog: workspace
+      schema: digital_divide_dev
+      host: "{{ env_var('DBT_DATABRICKS_HOST') }}"
+      http_path: "{{ env_var('DBT_DATABRICKS_HTTP_PATH') }}"
+      token: "{{ env_var('DBT_DATABRICKS_TOKEN') }}"
+      threads: 4

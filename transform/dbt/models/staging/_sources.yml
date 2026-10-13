@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: silver
+    description: Silver tables built by the PySpark notebooks (ADR 0002–0004).
+    database: workspace
+    schema: digital_divide_dev
+    tables:
+      - name: silver_worldbank_countries
+        description: WDI economies with region and current income group; aggregates flagged.
+      - name: silver_worldbank_indicator_values
+        description: WDI values per economy, indicator and year (null values dropped).
+      - name: silver_country_boundaries
+        description: Natural Earth admin-0 units with WDI-compatible country codes.
+      - name: silver_ookla_country_quarter
+        description: Ookla tests per country, quarter and connection type, as additive sums.
+      - name: silver_ookla_nl_tiles
+        description: Ookla tiles inside Dutch municipalities, one row per tile and quarter.
+      - name: silver_nl_municipalities
+        description: Current Dutch municipalities (PDOK).

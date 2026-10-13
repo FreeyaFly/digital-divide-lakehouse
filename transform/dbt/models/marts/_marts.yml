@@ -1,0 +1,185 @@
+version: 2
+
+models:
+  # ---------------------------------------------------------------- dimensions
+  - name: dim_country
+    description: >
+      One row per country code with WDI data or an Ookla boundary. in_wdi = false marks units
+      without WDI data (Taiwan, Western Sahara, small territories, de facto units): use them for
+      speed only, never in WDI joins or group aggregates.
+    columns:
+      - name: country_code
+        description: ISO3 or WDI code; Natural Earth ADM0_A3 for units without one.
+        data_tests: [unique, not_null]
+      - name: country_name
+        data_tests: [not_null]
+      - name: in_wdi
+        data_tests: [not_null]
+      - name: income_code_current
+        description: Income group for the current World Bank fiscal year (WDI codes).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["LIC", "LMC", "UMC", "HIC"]
+
+  - name: dim_country_income_history
+    description: >
+      SCD2 history of World Bank income groups, FY89 to the current fiscal year, from the
+      historical classification workbook (seed wb_income_history). valid_to is null for the
+      current version. Join on a date: date between valid_from and coalesce(valid_to, max date).
+    columns:
+      - name: income_version_key
+        data_tests: [unique, not_null]
+      - name: country_code
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: country_code
+      - name: income_code
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["LIC", "LMC", "UMC", "HIC"]
+      - name: valid_from
+        data_tests: [not_null]
+
+  - name: dim_indicator
+    description: The 14 WDI indicators, with report names and the group aggregation rule.
+    columns:
+      - name: indicator_code
+        data_tests: [unique, not_null]
+      - name: short_name
+        data_tests: [unique, not_null]
+      - name: group_aggregation
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["population_weighted", "sum", "not_aggregated"]
+
+  - name: dim_quarter
+    description: Quarters with Ookla data.
+    columns:
+      - name: quarter_start
+        data_tests: [unique, not_null]
+
+  - name: dim_municipality
+    description: Current Dutch municipalities (PDOK).
+    columns:
+      - name: municipality_code
+        data_tests: [unique, not_null]
+
+  # ---------------------------------------------------------------- facts
+  - name: fct_indicator_country_year
+    description: One WDI value per economy, indicator and year; missing values have no row.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [country_code, indicator_code, year]
+    columns:
+      - name: country_code
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: country_code
+      - name: indicator_code
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_indicator')
+                field: indicator_code
+      - name: value
+        data_tests: [not_null]
+
+  - name: fct_speed_country_quarter
+    description: >
+      Ookla tests per country, quarter and connection type. Average over any set of rows as
+      sum(sum_d_kbps_x_tests) / sum(tests); the avg_* columns describe one row only.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [country_code, conn_type, quarter_start]
+    columns:
+      - name: country_code
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: country_code
+      - name: conn_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["fixed", "mobile"]
+      - name: quarter_start
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_quarter')
+                field: quarter_start
+      - name: tests
+        data_tests: [not_null]
+
+  - name: fct_speed_municipality_quarter
+    description: >
+      Ookla tests per Dutch municipality, quarter and connection type, with additive sums for
+      the quarter and for the last four quarters (*_4q). is_low_sample: fewer than 100 tests.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [municipality_code, conn_type, quarter_start]
+    columns:
+      - name: municipality_code
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_municipality')
+                field: municipality_code
+      - name: quarter_start
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_quarter')
+                field: quarter_start
+
+  # ---------------------------------------------------------------- aggregates and marts
+  - name: agg_indicator_group_year
+    description: >
+      WDI indicators aggregated from countries to world, regions and income groups (current and
+      as-was classification). Use only rows with is_reliable (population coverage >= 90%).
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [group_type, group_code, indicator_code, year]
+    columns:
+      - name: group_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["world", "region", "income_current", "income_as_was"]
+
+  - name: agg_speed_group_quarter
+    description: Test-weighted speed per world, region and income group, quarter and type.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [group_type, group_code, conn_type, quarter_start]
+
+  - name: mart_country_year
+    description: >
+      One row per WDI economy and year with indicators and yearly speed side by side, for
+      cross-country charts. quarters_* tells how many quarters the yearly speed pools.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [country_code, year]
