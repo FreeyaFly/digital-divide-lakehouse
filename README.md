@@ -2,7 +2,7 @@
 
 An end-to-end data platform that measures the digital divide, from global country-level ICT indicators down to broadband quality in Dutch municipalities.
 
-> Status: **Week 4 done: every Ookla tile assigned to a country** (18.3 M distinct tiles, exact H3 core/border-chip join, identical to an independent shapely check) and aggregated per country and quarter. Next: dbt Gold star schema.
+> Status: **Week 5 done: dbt Gold layer**: star schema, region and income-group aggregates rebuilt from countries, and 37 years of World Bank income classifications as an SCD2 dimension; 73 dbt resources build and test cleanly. Next: orchestration with Airflow and CI.
 
 | Week | Scope | Status |
 |---|---|---|
@@ -10,7 +10,7 @@ An end-to-end data platform that measures the digital divide, from global countr
 | 2 | World Bank: API → ADLS → Bronze → Silver, incremental and idempotent | ✅ |
 | 3 | Ookla: 8 quarters × fixed/mobile into Bronze (80 M rows); Dutch municipalities via H3 | ✅ |
 | 4 | Ookla global country-level aggregation (Natural Earth + H3 tessellation), performance notes | ✅ |
-| 5 | dbt Gold star schema, SCD2 snapshot | ⏳ |
+| 5 | dbt Gold star schema, SCD2 income history (FY89–FY27) + snapshot, 54 tests | ✅ |
 | 6 | Airflow orchestration, GitHub Actions CI | ⏳ |
 | 7 | Power BI report | ⏳ |
 
@@ -46,18 +46,18 @@ An end-to-end data platform that measures the digital divide, from global countr
 
 ```
 infra/terraform/   Azure resources: resource group, ADLS Gen2, Key Vault, budget alert
-ingestion/         Python extractors (World Bank) and their config
+ingestion/         Python extractors (World Bank indicators, income history) and their config
 tests/             pytest unit tests (extractors, notebook helpers, tools)
 notebooks/         Databricks notebooks (source format): validation, Bronze, Silver,
                    plus country_codes.py, a helper module imported by Notebook 34
 tools/             Developer tools, e.g. exporting clean notebook run snapshots
-transform/dbt/     dbt project                              (week 5)
+transform/dbt/     dbt project: staging views, Gold star schema, SCD2, seed, snapshot
 orchestration/     Airflow DAGs                             (week 6)
 docs/              Decision records (ADRs) and weekly checklists
 docs/notebook-runs/  Executed notebook snapshots (.ipynb with outputs)
 ```
 
-Design decisions are recorded in [ADR 0001: platform choice](docs/adr/0001-platform-choice.md), [ADR 0002: World Bank ingestion](docs/adr/0002-worldbank-ingestion.md), [ADR 0003: Ookla ingestion and Dutch municipalities](docs/adr/0003-ookla-ingestion.md) and [ADR 0004: global country-level aggregation](docs/adr/0004-ookla-country-aggregation.md).
+Design decisions are recorded in [ADR 0001: platform choice](docs/adr/0001-platform-choice.md), [ADR 0002: World Bank ingestion](docs/adr/0002-worldbank-ingestion.md), [ADR 0003: Ookla ingestion and Dutch municipalities](docs/adr/0003-ookla-ingestion.md), [ADR 0004: global country-level aggregation](docs/adr/0004-ookla-country-aggregation.md) and [ADR 0005: dbt Gold layer](docs/adr/0005-dbt-gold.md).
 
 ## How to run (World Bank)
 
@@ -116,6 +116,31 @@ databricks workspace import "/Users/<you>/ddlake/country_codes.py" `
 
 Snapshots of the first runs are in `docs/notebook-runs/2026-10-11_3*` (week 3) and `docs/notebook-runs/2026-10-12_3*` (week 4).
 
+## How to run (dbt Gold)
+
+The Gold layer is built with dbt on the Databricks SQL warehouse ([ADR 0005](docs/adr/0005-dbt-gold.md)).
+
+```powershell
+# 1. Install dbt into the project environment
+.venv\Scripts\python -m pip install -e ".[dev,transform]"
+
+# 2. Connection: profiles.yml reads three user environment variables.
+#    Token: Databricks > Settings > Developer > Access tokens, scope "sql" (BI Tools).
+[Environment]::SetEnvironmentVariable("DBT_DATABRICKS_HOST", "<workspace-host>", "User")
+[Environment]::SetEnvironmentVariable("DBT_DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/<warehouse-id>", "User")
+[Environment]::SetEnvironmentVariable("DBT_DATABRICKS_TOKEN", (Read-Host "Paste token"), "User")
+
+# 3. Build, test and document (open a new terminal first so the variables are loaded)
+cd transform/dbt
+..\..\.venv\Scripts\dbt debug
+..\..\.venv\Scripts\dbt build          # seed, 17 models, snapshot, 54 tests
+..\..\.venv\Scripts\dbt docs generate
+```
+
+The income history seed is regenerated each July, when the World Bank publishes a new fiscal year: `python -m ingestion.worldbank.income_history` (it stops if the workbook's SHA-256 changed, so the new release is reviewed first).
+
+![dbt lineage graph](docs/images/week5-dbt-lineage.png)
+
 ## Cost control
 
 **Hard cap: under €1 for the whole project** (worst-case estimate: about €0.10).
@@ -129,7 +154,7 @@ See the cost model in [docs/adr/0001-platform-choice.md](docs/adr/0001-platform-
 
 ## Attribution
 
-- **World Bank, World Development Indicators**, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Within WDI, the internet, broadband and mobile indicators originate from the ITU World Telecommunication/ICT Indicators Database, and secure Internet servers from Netcraft.
+- **World Bank, World Development Indicators**, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Within WDI, the internet, broadband and mobile indicators originate from the ITU World Telecommunication/ICT Indicators Database, and secure Internet servers from Netcraft. The historical income classification (`OGHIST.xlsx`) is a resource of the same WDI dataset.
 - **Speed test data © Ookla**, 2019–present, licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 - **Municipality boundaries © Kadaster** (Bestuurlijke Gebieden, via PDOK), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - **Country boundaries: Made with Natural Earth.** Free vector and raster map data @ [naturalearthdata.com](https://www.naturalearthdata.com/) (public domain).

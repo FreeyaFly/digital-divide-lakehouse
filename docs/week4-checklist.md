@@ -30,6 +30,6 @@
 
 ## E. Repo
 - [x] Run snapshots `docs/notebook-runs/2026-10-12_3*` exported (before the idempotency run), scan clean
-- [ ] Commit: notebooks 34–35, `country_codes.py`, tests
-- [ ] Commit: ADR 0004, checklist, README, snapshots
-- [ ] Push
+- [x] Commit: notebooks 34–35, `country_codes.py`, tests
+- [x] Commit: ADR 0004, checklist, README, snapshots
+- [x] Push
