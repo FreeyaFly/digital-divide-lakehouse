@@ -1,0 +1,7 @@
+# gitleaks configuration for CI (.github/workflows/ci.yml): the default rules, plus narrow
+# allowlist entries for known fake values in tests and docs. Prefer a path AND a pattern per
+# entry, so a real secret in the same file is still reported.
+title = "ddlake gitleaks config"
+
+[extend]
+useDefault = true

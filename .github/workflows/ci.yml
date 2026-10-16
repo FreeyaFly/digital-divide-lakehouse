@@ -1,0 +1,117 @@
+# Checks that need no cloud credentials, so they can run on every push and pull request of a
+# public repository. Deliberately not here (docs/adr/0006-orchestration.md):
+# - `dbt build`: needs a Databricks token in the repository secrets and uses Free Edition quota.
+# - `terraform plan`: public Actions logs would show resource names, subscription and tenant IDs
+#   and the budget e-mail. CI runs fmt + validate; plan runs locally against the remote state.
+# Actions are pinned to commit SHAs (tag in the comment).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (ruff, pytest)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12" # same minor version as Databricks serverless and the image
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pytest -q -rs
+
+  dbt:
+    name: dbt (parse)
+    runs-on: ubuntu-24.04
+    env:
+      # Placeholders: `dbt parse` renders the profile but never connects.
+      DBT_DATABRICKS_HOST: ci.invalid
+      DBT_DATABRICKS_HTTP_PATH: /sql/1.0/warehouses/ci
+      DBT_DATABRICKS_TOKEN: unused-in-ci
+      DBT_SEND_ANONYMOUS_USAGE_STATS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-tasks.txt
+      - name: Install the image's locked dependencies
+        run: >-
+          pip install --require-hashes --only-binary=:all:
+          --no-binary=dbt-core-experimental-parser -r requirements-tasks.txt
+      - name: dbt parse
+        working-directory: transform/dbt
+        run: dbt parse --profiles-dir .
+
+  airflow:
+    name: Airflow DAG
+    runs-on: ubuntu-24.04
+    env:
+      AIRFLOW_VERSION: "3.3.2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install Airflow with the official constraints
+        run: >-
+          pip install "apache-airflow==${AIRFLOW_VERSION}"
+          apache-airflow-providers-docker apache-airflow-providers-databricks pytest
+          --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.12.txt"
+      - name: DAG integrity test
+        env:
+          AIRFLOW_HOME: ${{ runner.temp }}/airflow
+        run: |
+          # Fail instead of silently skipping if the providers did not install.
+          python -c "import airflow.providers.docker, airflow.providers.databricks"
+          pytest -q -rs -p no:cacheprovider tests/orchestration
+
+  terraform:
+    name: Terraform (fmt, validate)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.2
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive -diff
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    env:
+      GITLEAKS_VERSION: "8.30.0"
+      GITLEAKS_SHA256: 79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # scan the whole history, not only the last commit
+      - name: Install gitleaks (checksum pinned)
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+      - name: gitleaks
+        run: '"$RUNNER_TEMP/gitleaks" git --config .gitleaks.toml --redact --verbose --no-banner .'

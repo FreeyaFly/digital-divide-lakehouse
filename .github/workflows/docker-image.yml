@@ -1,0 +1,32 @@
+# Builds the task image (Dockerfile) when something that goes into it changes. Build only:
+# Airflow runs the image from the local Docker Engine, so nothing is pushed to a registry.
+name: Docker image
+
+on:
+  push:
+    branches: [main]
+    paths: [Dockerfile, .dockerignore, requirements-tasks.txt, "ingestion/**", "transform/dbt/**",
+            .github/workflows/docker-image.yml]
+  pull_request:
+    paths: [Dockerfile, .dockerignore, requirements-tasks.txt, "ingestion/**", "transform/dbt/**",
+            .github/workflows/docker-image.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ddlake-tasks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -t ddlake-tasks:ci .
+      - name: Smoke test (no credentials)
+        run: |
+          docker run --rm ddlake-tasks:ci dbt --version
+          docker run --rm ddlake-tasks:ci python -c "import ingestion.worldbank, ingestion.landing_sas"

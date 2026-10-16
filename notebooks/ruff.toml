@@ -1,0 +1,11 @@
+# Databricks notebooks: the runtime injects `spark`, `dbutils` and `display`, and cells
+# (`# COMMAND ----------`, `# MAGIC`) mean imports cannot all sit at the top of the file.
+# Markdown tables and inline SQL make lines longer than in plain modules; wrapping them would
+# change the rendered notebook, so the limit is 120 here.
+# Scoped to this folder so the rest of the code still reports these names as undefined.
+extend = "../pyproject.toml"
+builtins = ["spark", "dbutils", "display"]
+line-length = 120
+
+[lint]
+ignore = ["E402"]

@@ -9,7 +9,7 @@
 # MAGIC | Table | Key | Notes |
 # MAGIC |---|---|---|
 # MAGIC | `silver_worldbank_countries` | `country_iso3` | `is_aggregate` marks regions and income groups (region `NA`) |
-# MAGIC | `silver_worldbank_indicator_values` | `country_iso3, indicator_code, year` | typed; null values dropped (missing = no row) |
+# MAGIC | `silver_worldbank_indicator_values` | `country_iso3, indicator_code, year` | typed; no row for a null value |
 # MAGIC
 # MAGIC Each WDI release is a full snapshot of the selected indicators, so the MERGE
 # MAGIC updates rows whose content changed (`row_hash`), inserts new ones and deletes rows the
@@ -39,7 +39,6 @@ INGESTION_VERSIONS = f"{T}.ingestion_versions"
 
 from pyspark.sql import Window
 from pyspark.sql import functions as F
-
 
 # The release to process: the newest one Notebook 10 recorded as fully landed and reconciled.
 release = (

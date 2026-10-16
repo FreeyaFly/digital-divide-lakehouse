@@ -67,8 +67,10 @@ for name, url in SOURCES.items():
 # MAGIC %md ## 3 · ADLS Gen2 reachability
 # MAGIC
 # MAGIC Two separate questions:
-# MAGIC * **HTTPS**: can Python code reach `*.dfs.core.windows.net`? If so, the ingest jobs can upload to ADLS with an SDK.
-# MAGIC * **Spark**: can Spark read `abfss://` paths? Serverless compute usually needs a Unity Catalog external location for that, which may not be possible on Free Edition.
+# MAGIC * **HTTPS**: can Python code reach `*.dfs.core.windows.net`? If so, the ingest jobs can
+# MAGIC   upload to ADLS with an SDK.
+# MAGIC * **Spark**: can Spark read `abfss://` paths? Serverless compute usually needs a Unity
+# MAGIC   Catalog external location for that, which may not be possible on Free Edition.
 
 # COMMAND ----------
 
