@@ -11,7 +11,7 @@
       (choose "Microsoft account" in the Windows popup and approve in Microsoft Authenticator).
       Do **not** use `--use-device-code`: Security defaults on this tenant block device-code sign-in (`AADSTS530035`), even with MFA registered.
 - [x] Databricks CLI, `databricks -v`
-- [ ] Docker Desktop (needed in week 6, can wait)
+- [x] ~~Docker Desktop~~ Docker Engine inside WSL2 instead, lighter on 8 GB of RAM (week 6, [ADR 0006](adr/0006-orchestration.md))
 
 ## B. Azure infrastructure (Terraform)
 - [x] `cp terraform.tfvars.example terraform.tfvars` and fill it in

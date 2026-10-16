@@ -15,7 +15,7 @@
 - [x] Databricks CLI OAuth login in a standalone terminal (`databricks auth login --profile <profile>`)
 - [x] Secret scope `ddlake` created (Free Edition supports secret scopes)
 - [x] User-delegation SAS on `landing`: `sp=rl`, signed, stored as `adls-landing-sas`, expires **2026-10-11**
-- [ ] Regenerate the SAS before it expires, every week until week 6 automates it
+- [x] Regenerate the SAS before it expires, every week until week 6 automates it (automated: every Airflow run rotates it, [ADR 0006](adr/0006-orchestration.md))
 
 ## C. Bronze (Notebook 10)
 

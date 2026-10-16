@@ -29,6 +29,6 @@
 - [x] `dbt docs generate`; lineage graph saved to `docs/images/week5-dbt-lineage.png`
 
 ## F. Repo
-- [ ] Commit: income history script, seed, dbt project, tests
-- [ ] Commit: ADR 0005, checklist, README, lineage image; tick week-4 checklist
-- [ ] Push
+- [x] Commit: income history script, seed, dbt project, tests (`3e432db`)
+- [x] Commit: ADR 0005, checklist, README, lineage image; tick week-4 checklist (`3d4c4f0`)
+- [x] Push
