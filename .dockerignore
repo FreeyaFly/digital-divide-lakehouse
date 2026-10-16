@@ -1,0 +1,13 @@
+# Send only what the task image needs to the Docker build (allowlist).
+*
+!requirements-tasks.txt
+!ingestion/
+!transform/dbt/
+
+# Generated or local files inside the allowed folders
+**/__pycache__/
+**/*.py[cod]
+transform/dbt/target/
+transform/dbt/logs/
+transform/dbt/dbt_packages/
+transform/dbt/.user.yml

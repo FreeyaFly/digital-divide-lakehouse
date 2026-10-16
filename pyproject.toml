@@ -10,7 +10,9 @@ requires-python = ">=3.11"
 dependencies = [
     "requests>=2.31",
     "azure-identity>=1.15",
+    "azure-storage-blob>=12.19",
     "azure-storage-file-datalake>=12.14",
+    "databricks-sdk>=0.30",
     "openpyxl>=3.1",
 ]
 
@@ -36,6 +38,8 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Executed notebook snapshots are generated output; their source is notebooks/*.py.
+extend-exclude = ["docs/notebook-runs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
