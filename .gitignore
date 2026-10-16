@@ -6,6 +6,8 @@
 !*.tfvars.example
 *.tfplan
 crash.log
+# Remote state names (subscription, state account); backend.hcl.example is committed
+backend.hcl
 
 # Editor backups (can hold copies of secret files, e.g. terraform.tfvars.bak)
 *.bak
@@ -27,6 +29,7 @@ transform/dbt/logs/
 transform/dbt/.user.yml
 
 # Secrets / local
+.databricks/
 .env
 .databrickscfg
 *.pem

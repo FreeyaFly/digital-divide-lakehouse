@@ -1,0 +1,90 @@
+# Databricks jobs as code (Databricks Asset Bundle). Design: docs/adr/0006-orchestration.md.
+#
+#   databricks bundle validate -p <profile>
+#   databricks bundle deploy   -p <profile>
+#   databricks bundle run ddlake_refresh -p <profile>
+#
+# The storage account name comes from the environment (BUNDLE_VAR_storage_account), so no
+# environment identifier is committed. Notebook tasks without a cluster run on serverless.
+
+bundle:
+  name: ddlake
+
+sync:
+  paths:
+    - ./notebooks
+  exclude:
+    - notebooks/ruff.toml # lint config for CI, not needed in the workspace
+
+variables:
+  storage_account:
+    description: ADLS Gen2 account with the World Bank landing zone (Terraform output storage_account_name)
+  catalog:
+    description: Unity Catalog catalog
+    default: workspace
+  schema:
+    description: Schema for Bronze, Silver and control tables
+    default: digital_divide_dev
+
+resources:
+  jobs:
+    # Weekly: new World Bank releases and new Ookla quarters. Every task is idempotent, so a run
+    # with no new data writes nothing.
+    ddlake_refresh:
+      name: ddlake_refresh
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+      tasks:
+        - task_key: worldbank_bronze
+          notebook_task:
+            notebook_path: ./notebooks/10_worldbank_land_to_bronze.py
+            base_parameters:
+              storage_account: ${var.storage_account}
+        - task_key: worldbank_silver
+          depends_on:
+            - task_key: worldbank_bronze
+          notebook_task:
+            notebook_path: ./notebooks/20_worldbank_bronze_to_silver.py
+        - task_key: ookla_bronze
+          notebook_task:
+            notebook_path: ./notebooks/31_ookla_land_to_bronze.py
+        - task_key: ookla_nl_silver
+          depends_on:
+            - task_key: ookla_bronze
+          notebook_task:
+            notebook_path: ./notebooks/33_ookla_nl_silver.py
+        # Compares its Dutch totals with the municipality Silver, so it runs after it.
+        - task_key: ookla_country_silver
+          depends_on:
+            - task_key: ookla_nl_silver
+          notebook_task:
+            notebook_path: ./notebooks/35_ookla_country_silver.py
+
+    # On demand: boundaries change rarely and tessellating them takes minutes. Notebooks 33 and
+    # 35 read the tables these build, so the weekly job does not rebuild them.
+    ddlake_reference:
+      name: ddlake_reference
+      max_concurrent_runs: 1
+      timeout_seconds: 3600
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+      tasks:
+        - task_key: nl_municipalities
+          notebook_task:
+            notebook_path: ./notebooks/32_nl_municipalities.py
+        - task_key: country_boundaries
+          notebook_task:
+            notebook_path: ./notebooks/34_country_boundaries.py
+
+targets:
+  dev:
+    mode: development
+    default: true
