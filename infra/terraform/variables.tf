@@ -27,7 +27,7 @@ variable "location" {
 }
 
 variable "budget_amount" {
-  description = "Monthly budget for the resource group, in the billing currency. The whole project is capped at €1."
+  description = "Monthly budget for the subscription, in the billing currency. The whole project is capped at €1."
   type        = number
   default     = 1
 }

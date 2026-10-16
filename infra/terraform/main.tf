@@ -76,6 +76,37 @@ resource "azurerm_role_assignment" "me_lake" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
+# --- Pipeline identity -------------------------------------------------------
+# Service principal for the orchestrated pipeline (Airflow task containers): it lands
+# World Bank files in the landing container and signs short-lived user delegation SAS
+# for Databricks. Its client secret is created outside Terraform
+# (az ad app credential reset) so it never lands in the state file.
+
+resource "azuread_application" "pipeline" {
+  display_name = "sp-${local.name_prefix}-pipeline"
+  owners       = [data.azurerm_client_config.current.object_id]
+}
+
+resource "azuread_service_principal" "pipeline" {
+  client_id = azuread_application.pipeline.client_id
+  owners    = [data.azurerm_client_config.current.object_id]
+}
+
+# Write access to the landing container only, not to the other lake containers.
+resource "azurerm_role_assignment" "pipeline_landing" {
+  scope                = azurerm_storage_container.lake["landing"].id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azuread_service_principal.pipeline.object_id
+}
+
+# Requesting a user delegation key is an account-level action; the SAS it signs is still
+# limited to what the principal can do (the landing container) and to the SAS scope.
+resource "azurerm_role_assignment" "pipeline_delegator" {
+  scope                = azurerm_storage_account.lake.id
+  role_definition_name = "Storage Blob Delegator"
+  principal_id         = azuread_service_principal.pipeline.object_id
+}
+
 # --- Secrets ---------------------------------------------------------------
 
 resource "azurerm_key_vault" "main" {
@@ -107,11 +138,14 @@ resource "azurerm_security_center_subscription_pricing" "storage" {
   resource_type = "StorageAccounts"
 }
 
-resource "azurerm_consumption_budget_resource_group" "main" {
-  name              = "budget-${local.name_prefix}"
-  resource_group_id = azurerm_resource_group.main.id
-  amount            = var.budget_amount
-  time_grain        = "Monthly"
+# Subscription scope, not resource group: the subscription holds only this project, so the
+# budget also covers what Terraform does not manage, such as the remote-state account
+# (infra/bootstrap) and anything created elsewhere by mistake.
+resource "azurerm_consumption_budget_subscription" "main" {
+  name            = "budget-${local.name_prefix}"
+  subscription_id = "/subscriptions/${var.subscription_id}"
+  amount          = var.budget_amount
+  time_grain      = "Monthly"
 
   time_period {
     start_date = formatdate("YYYY-MM-01'T'00:00:00Z", timestamp())

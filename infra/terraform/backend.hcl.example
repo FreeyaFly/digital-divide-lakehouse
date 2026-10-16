@@ -1,0 +1,8 @@
+# Copy to backend.hcl (git-ignored) and fill in; the names come from
+# infra/bootstrap/create_tfstate.ps1.
+#   terraform init -backend-config=backend.hcl                 (first time: add -migrate-state)
+subscription_id      = "00000000-0000-0000-0000-000000000000"
+resource_group_name  = "rg-ddlake-tfstate"
+storage_account_name = "<state storage account name>"
+container_name       = "tfstate"
+key                  = "ddlake-dev.tfstate"
